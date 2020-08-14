@@ -5,9 +5,62 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xitongsys/parquet-go/schema"
 	"github.com/xitongsys/parquet-go/parquet"
+	"github.com/xitongsys/parquet-go/schema"
 )
+
+func timeUnitToString(tu *parquet.TimeUnit) string {
+	if tu == nil {
+		return "NOT_SET"
+	}
+
+	switch {
+	case tu.IsSetMICROS():
+		return "MICROS"
+	case tu.IsSetMILLIS():
+		return "MILLIS"
+	case tu.IsSetNANOS():
+		return "NANOS"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func logicalTypeToStr(lt *parquet.LogicalType) string {
+	if lt == nil {
+		return "NOT_SET"
+	}
+	switch {
+	case lt.IsSetBSON():
+		return "BSON"
+	case lt.IsSetDATE():
+		return "DATE"
+	case lt.IsSetDECIMAL():
+		return fmt.Sprintf("DECIMAL Scale:%d Precision:%d", lt.GetDECIMAL().GetScale(), lt.GetDECIMAL().GetPrecision())
+	case lt.IsSetENUM():
+		return "ENUM"
+	case lt.IsSetINTEGER():
+		return "INT"
+	case lt.IsSetJSON():
+		return "JSON"
+	case lt.IsSetLIST():
+		return "LIST"
+	case lt.IsSetMAP():
+		return "MAP"
+	case lt.IsSetSTRING():
+		return "STRING"
+	case lt.IsSetTIME():
+		return fmt.Sprintf("TIME(UTC:%t UNIT:%s)", lt.GetTIME().IsAdjustedToUTC, lt.GetTIME().GetUnit())
+	case lt.IsSetTIMESTAMP():
+		return fmt.Sprintf("TIMESTAMP(UTC:%t UNIT:%s)", lt.GetTIMESTAMP().IsAdjustedToUTC, lt.GetTIMESTAMP().GetUnit())
+	case lt.IsSetUUID():
+		return "UUID"
+	case lt.IsSetUNKNOWN():
+		return "UNKNOWN"
+	}
+
+	return "UNKNOWN"
+}
 
 func ParquetTypeToParquetTypeStr(pT *parquet.Type, cT *parquet.ConvertedType) (string, string) {
 	var pTStr, cTStr string
@@ -137,14 +190,14 @@ func (self *Node) OutputJsonSchema() string {
 	}
 
 	pTStr, cTStr := ParquetTypeToParquetTypeStr(pT, cT)
-	tagStr := "\"name=%s, type=%s, repetitiontype=%s\""
+	tagStr := "\"name=%s, type=%s, logicalType=%s repetitiontype=%s\""
 	name := self.SE.GetName()
 
 	if len(self.Children) == 0 {
 		if *pT == parquet.Type_FIXED_LEN_BYTE_ARRAY && cT == nil {
 			length := self.SE.GetTypeLength()
-			tagStr = "\"name=%s, type=%s, length=%d, repetitiontype=%s\""
-			res += fmt.Sprintf(tagStr, name, pTStr, length, rTStr) + "}"
+			tagStr = "\"name=%s, type=%s, logicalType=%s length=%d, repetitiontype=%s\""
+			res += fmt.Sprintf(tagStr, name, pTStr, logicalTypeToStr(self.SE.GetLogicalType()), length, rTStr) + "}"
 
 		} else if cT != nil && *cT == parquet.ConvertedType_DECIMAL {
 			scale, precision := self.SE.GetScale(), self.SE.GetPrecision()
@@ -162,13 +215,13 @@ func (self *Node) OutputJsonSchema() string {
 			if cT != nil {
 				typeStr = cTStr
 			}
-			res += fmt.Sprintf(tagStr, name, typeStr, rTStr) + "}"
+			res += fmt.Sprintf(tagStr, name, typeStr, logicalTypeToStr(self.SE.GetLogicalType()), rTStr) + "}"
 
 		}
 	} else {
 		if cT != nil {
-			tagStr = "\"name=%s, type=%s, repetitiontype=%s\""
-			res += fmt.Sprintf(tagStr, name, cTStr, rTStr)
+			tagStr = "\"name=%s, type=%s, logicalType=%s repetitiontype=%s\""
+			res += fmt.Sprintf(tagStr, name, cTStr, logicalTypeToStr(self.SE.GetLogicalType()), rTStr)
 		} else {
 			tagStr = "\"name=%s, repetitiontype=%s\""
 			res += fmt.Sprintf(tagStr, name, rTStr)
